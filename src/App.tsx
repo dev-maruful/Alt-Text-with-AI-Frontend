@@ -1,39 +1,59 @@
-import { framer } from "framer-plugin"
-import { useState } from "react"
-import "./App.css"
+import { framer, CanvasNode } from "framer-plugin"
+import { useState, useEffect } from "react"
 
 framer.showUI({
   position: "top right",
-  width: 240,
-  height: 95,
+  width: 400,
+  height: 500,
 })
 
+function useSelection() {
+  const [selection, setSelection] = useState<CanvasNode[]>([])
+
+  useEffect(() => {
+    return framer.subscribeToSelection(setSelection)
+  }, [])
+
+  return selection
+}
+
 export function App() {
-  const [result, setResult] = useState("")
+  const selection = useSelection()
+  const [nodeInfo, setNodeInfo] = useState("")
 
-  const testServer = async () => {
-    try {
-      const response = await fetch("http://localhost:3000")
-
-      const text = await response.text()
-
-      setResult(text)
-    } catch (error) {
-      console.error(error)
-      setResult("Failed to connect")
+  const inspectSelection = () => {
+    if (selection.length === 0) {
+      setNodeInfo("Nothing selected")
+      return
     }
+
+    const node = selection[0]
+
+    console.log(node)
+
+    setNodeInfo(JSON.stringify(node, null, 2))
   }
 
   return (
-    <main>
+    <main style={{ padding: 12 }}>
       <button
         className="framer-button-primary"
-        onClick={testServer}
+        onClick={inspectSelection}
       >
-        Test Server
+        Inspect Selection
       </button>
 
-      <p>{result}</p>
+      <pre
+        style={{
+          marginTop: 12,
+          fontSize: 10,
+          overflow: "auto",
+          maxHeight: 400,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {nodeInfo}
+      </pre>
     </main>
   )
 }
