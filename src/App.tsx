@@ -3,8 +3,8 @@ import { useState, useEffect } from "react"
 
 framer.showUI({
     position: "top right",
-    width: 420,
-    height: 320,
+    width: 380,
+    height: 280,
 })
 
 function useSelection() {
@@ -75,33 +75,83 @@ export function App() {
     }
 
     return (
-        <main style={{ padding: 12, fontFamily: "sans-serif" }}>
-            <button
-                className="framer-button-primary"
-                onClick={generateAltText}
-                disabled={loading}
+    <main
+        style={{
+            padding: 16,
+            fontFamily: "Inter, sans-serif",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+        }}
+    >
+        <div>
+            <h3
+                style={{
+                    margin: 0,
+                    fontSize: 16,
+                    fontWeight: 600,
+                }}
             >
-                {loading ? "Generating..." : "Generate Alt Text"}
-            </button>
+                ✨ Alt Text with AI
+            </h3>
 
-            <div style={{ marginTop: 12, fontSize: 12 }}>
-                Selected layers: {selection.length}
+            <p
+                style={{
+                    margin: "4px 0 0",
+                    fontSize: 12,
+                    color: "#666",
+                }}
+            >
+                {selection.length} layer selected
+            </p>
+        </div>
+
+        <button
+            className="framer-button-primary"
+            onClick={generateAltText}
+            disabled={loading}
+        >
+            {loading ? "Generating..." : "Generate Alt Text"}
+        </button>
+
+        <div>
+            <div
+                style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    marginBottom: 6,
+                }}
+            >
+                Generated Alt Text
             </div>
 
             <div
                 style={{
-                    marginTop: 12,
-                    fontSize: 12,
-                    whiteSpace: "pre-wrap",
                     background: "#f5f5f5",
-                    color: "#000000",
-                    padding: 8,
-                    borderRadius: 6,
-                    minHeight: 60,
+                    border: "1px solid #e5e5e5",
+                    color: "black",
+                    borderRadius: 8,
+                    padding: 10,
+                    minHeight: 80,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-wrap",
                 }}
             >
-                {result}
+                {loading
+                ? "🧠 Analyzing image and generating alt text..."
+                : result || "Select an image and generate alt text."
+                }
             </div>
-        </main>
-    )
+        </div>
+
+        {result && !result.startsWith("❌") && (
+            <button
+                onClick={() => navigator.clipboard.writeText(result)}
+            >
+                Copy Alt Text
+            </button>
+        )}
+    </main>
+)
 }
