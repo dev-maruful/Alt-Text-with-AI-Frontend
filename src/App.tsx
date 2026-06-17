@@ -1,10 +1,11 @@
-import { framer, CanvasNode } from "framer-plugin"
+import { framer, CanvasNode, useIsAllowedTo } from "framer-plugin"
+import type { ImageAsset } from "framer-plugin"
 import { useState, useEffect } from "react"
 
 framer.showUI({
     position: "top right",
     width: 380,
-    height: 280,
+    height: 300,
 })
 
 function useSelection() {
@@ -17,23 +18,24 @@ function useSelection() {
     return selection
 }
 
-function getImageUrl(node: CanvasNode): string | null {
-    // check if property exists at runtime
-    const maybeNode = node as unknown as {
-        backgroundImage?: { url?: string }
+type ImageAssetWithClone = ImageAsset & {
+    cloneWithAttributes: (args: {
+        altText?: string
+        resolution?: string
+    }) => ImageAsset
+}
+
+function getImageAsset(node: CanvasNode): ImageAssetWithClone | null {
+    const maybeNode = node as {
+        backgroundImage?: ImageAssetWithClone
     }
 
-    const url = maybeNode.backgroundImage?.url
-
-    if (typeof url === "string") {
-        return url
-    }
-
-    return null
+    return maybeNode.backgroundImage || null
 }
 
 export function App() {
     const selection = useSelection()
+    const canSetAttributes = useIsAllowedTo("setAttributes")
 
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState("")
@@ -41,17 +43,28 @@ export function App() {
     const generateAltText = async () => {
         const node = selection[0]
 
-        const imageUrl = getImageUrl(node)
+        if (!node) {
+            setResult("❌ No layer selected")
+            return
+        }
 
-        if (!imageUrl) {
-            setResult("❌ Select an image frame with a background image")
+        const image = getImageAsset(node)
+        const imageUrl = image?.url
+
+        if (!image || !imageUrl) {
+            setResult("❌ Select a frame with an image")
+            return
+        }
+
+        if (!canSetAttributes) {
+            setResult("❌ Missing permission: setAttributes")
             return
         }
 
         setLoading(true)
-        setResult("")
 
         try {
+            // 1. Call backend
             const response = await fetch(
                 "http://localhost:3000/generate-alt-text",
                 {
@@ -64,8 +77,26 @@ export function App() {
             )
 
             const data = await response.json()
+            const altText = data.altText?.trim()
 
-            setResult(data.altText?.trim() || "No alt text returned")
+            if (!altText) {
+                setResult("❌ No alt text generated")
+                return
+            }
+
+            // 2. update UI FIRST (important for responsiveness)
+            setResult(altText)
+
+            // 3. clone image asset
+            const newImageAsset = image.cloneWithAttributes({
+                altText,
+            })
+
+            // 4. write back to framer
+            await framer.setAttributes(node.id, {
+                backgroundImage: newImageAsset,
+            })
+
         } catch (error) {
             console.error(error)
             setResult("❌ Failed to generate alt text")
@@ -75,83 +106,66 @@ export function App() {
     }
 
     return (
-    <main
-        style={{
-            padding: 16,
-            fontFamily: "Inter, sans-serif",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-        }}
-    >
-        <div>
-            <h3
-                style={{
-                    margin: 0,
-                    fontSize: 16,
-                    fontWeight: 600,
-                }}
-            >
-                ✨ Alt Text with AI
-            </h3>
-
-            <p
-                style={{
-                    margin: "4px 0 0",
-                    fontSize: 12,
-                    color: "#666",
-                }}
-            >
-                {selection.length} layer selected
-            </p>
-        </div>
-
-        <button
-            className="framer-button-primary"
-            onClick={generateAltText}
-            disabled={loading}
+        <main
+            style={{
+                padding: 16,
+                fontFamily: "Inter, sans-serif",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+            }}
         >
-            {loading ? "Generating..." : "Generate Alt Text"}
-        </button>
+            <div>
+                <h3 style={{ margin: 0, fontSize: 16 }}>
+                    ✨ Alt Text with AI
+                </h3>
 
-        <div>
-            <div
-                style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    marginBottom: 6,
-                }}
-            >
-                Generated Alt Text
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#666" }}>
+                    {selection.length} layer selected
+                </p>
             </div>
 
-            <div
-                style={{
-                    background: "#f5f5f5",
-                    border: "1px solid #e5e5e5",
-                    color: "black",
-                    borderRadius: 8,
-                    padding: 10,
-                    minHeight: 80,
-                    fontSize: 12,
-                    lineHeight: 1.5,
-                    whiteSpace: "pre-wrap",
-                }}
-            >
-                {loading
-                ? "🧠 Analyzing image and generating alt text..."
-                : result || "Select an image and generate alt text."
-                }
-            </div>
-        </div>
-
-        {result && !result.startsWith("❌") && (
             <button
-                onClick={() => navigator.clipboard.writeText(result)}
+                className="framer-button-primary"
+                onClick={generateAltText}
+                disabled={loading}
             >
-                Copy Alt Text
+                {loading ? "Generating..." : "Generate & Save Alt Text"}
             </button>
-        )}
-    </main>
-)
+
+            <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    Result
+                </div>
+
+                <div
+                    style={{
+                        background: "#f5f5f5",
+                        color: "#000",
+                        border: "1px solid #e5e5e5",
+                        borderRadius: 8,
+                        padding: 10,
+                        minHeight: 70,
+                        fontSize: 12,
+                        whiteSpace: "pre-wrap",
+                    }}
+                >
+                    {loading
+                        ? "🧠 Generating and saving alt text..."
+                        : result || "Select an image and generate alt text."
+                    }
+                </div>
+            </div>
+
+            {result && !result.startsWith("❌") && (
+                <button
+                    onClick={() =>
+                        navigator.clipboard.writeText(result)
+                    }
+                >
+                    Copy Alt Text
+                </button>
+            )}
+        </main>
+    )
 }
